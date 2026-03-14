@@ -1,0 +1,74 @@
+@import 'tailwindcss';
+
+@theme {
+  /* oh places — "Golden hour" palette
+     Warmth of discovery, calm of belonging, inclusive community spaces */
+
+  /* Primary: warm amber / honey — discovery, warmth, human connection */
+  --color-primary-100: #fdf5ed;
+  --color-primary-200: #c18b5b;
+  --color-primary-300: #8b5e34;
+
+  /* Secondary: deep teal — calm, trust, grounded spaces */
+  --color-secondary-100: #e8f0ef;
+  --color-secondary-200: #3d6b6b;
+
+  /* Accent: soft teal for links and highlights */
+  --color-accent: #4a7c7c;
+  --color-accent-soft: #7a9e9e;
+
+  /* Neutrals: warm stone family */
+  --color-stone-50: #fdfaf7;
+  --color-stone-100: #f7f3ef;
+  --color-stone-200: #ebe6e1;
+  --color-stone-300: #d4cdc6;
+  --color-stone-400: #9c9590;
+  --color-stone-500: #6b6560;
+  --color-stone-600: #5a5550;
+  --color-stone-700: #3d3a36;
+  --color-stone-800: #2c2a27;
+  --color-stone-900: #1c1b19;
+
+  /* Logo accent: more orange (not gold) */
+  --color-logo-accent: #d9732d;
+
+  /* Fonts: Lora for logo (warm, readable serif), DM Sans for UI */
+  --font-logo: "Lora", serif;
+  --font-display: "DM Sans", system-ui, sans-serif;
+  --font-sans: "DM Sans", system-ui, sans-serif;
+
+  /* Refined shadows */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.06), 0 4px 6px -4px rgb(0 0 0 / 0.06);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.06), 0 8px 10px -6px rgb(0 0 0 / 0.06);
+
+  /* Border radius */
+  --radius-sm: 0.5rem;
+  --radius: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.5rem;
+}
+
+/* Base styles — prevent horizontal overflow */
+@layer base {
+  html {
+    @apply antialiased overflow-x-hidden;
+  }
+  body {
+    @apply text-stone-800 bg-stone-50 font-sans overflow-x-hidden;
+    letter-spacing: 0.01em;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-semibold tracking-tight text-stone-900;
+  }
+}
+
+/* Focus rings — use primary amber */
+@layer utilities {
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-200/40 focus:ring-offset-2 focus:ring-offset-stone-50;
+  }
+}

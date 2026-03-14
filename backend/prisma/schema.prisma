@@ -1,0 +1,122 @@
+// Unified Availability Engine Schema
+// This schema supports venue availability, user availability, and community heatmaps
+// All availability uses the same unified model scoped by ownerType
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../ohfacilitators.db"
+}
+
+enum OwnerType {
+  USER
+  VENUE
+}
+
+enum PeriodType {
+  MORNING
+  AFTERNOON
+  EVENING
+  CUSTOM
+}
+
+enum SlotStatus {
+  AVAILABLE
+  UNAVAILABLE
+  TENTATIVE
+}
+
+enum OverrideStatus {
+  BLOCKED
+  BOOKED
+}
+
+model AvailabilityProfile {
+  id        String   @id @default(uuid())
+  ownerType OwnerType
+  ownerId   String
+  timezone  String   @default("Australia/Sydney")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  slots    AvailabilitySlot[]
+  overrides AvailabilityOverride[]
+
+  @@unique([ownerType, ownerId])
+  @@index([ownerType, ownerId])
+}
+
+model AvailabilitySlot {
+  id         String       @id @default(uuid())
+  profileId  String
+  profile    AvailabilityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  date       DateTime?   // null if recurring
+  dayOfWeek  Int?        // 0-6 (0=Sunday, 1=Monday, etc.) if recurring
+  period     PeriodType
+  startTime  String       // HH:MM format
+  endTime    String       // HH:MM format
+  status     SlotStatus   @default(AVAILABLE)
+
+  createdAt  DateTime     @default(now())
+
+  @@index([profileId, date])
+  @@index([profileId, dayOfWeek])
+}
+
+model AvailabilityOverride {
+  id         String         @id @default(uuid())
+  profileId  String
+  profile    AvailabilityProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  date       DateTime       // Specific date
+  startTime  String         // HH:MM format
+  endTime    String         // HH:MM format
+  status     OverrideStatus
+  notes      String?        // Optional notes (e.g., booking reference)
+
+  createdAt  DateTime       @default(now())
+
+  @@index([profileId, date])
+}
+
+// Existing models (reference only - keep existing tables)
+model User {
+  id          String   @id
+  email       String   @unique
+  fullName    String
+  passwordHash String
+  role        String   @default("user")
+  locale      String   @default("en")
+  createdAt   DateTime @default(now())
+}
+
+model Place {
+  id          String   @id
+  title       String
+  description String?
+  address     String?
+  lat         Float?
+  lng         Float?
+  communityId String?
+  visibility  String   @default("draft")
+  imageUrl    String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+}
+
+model Community {
+  id          String   @id
+  name        String
+  slug        String   @unique
+  description String?
+  visibility  String   @default("public")
+  type        String   @default("open")
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+}
