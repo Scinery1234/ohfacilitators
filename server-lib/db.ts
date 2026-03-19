@@ -4,6 +4,27 @@ const sql = neon(process.env.DATABASE_URL!);
 
 // Ensure tables exist
 export async function initDb() {
+  // ─── Tenants (multi-tenancy root) ───────────────────────────────────────────
+  // Each tenant is an OhPlaces account (host studio, wellness centre, etc.)
+  await sql`
+    CREATE TABLE IF NOT EXISTS tenants (
+      id TEXT PRIMARY KEY,
+      slug TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      domain TEXT,
+      logo_url TEXT,
+      primary_color TEXT DEFAULT '#000000',
+      stripe_account_id TEXT,
+      cal_api_key TEXT,
+      twilio_number TEXT,
+      purposefields_opt_in BOOLEAN DEFAULT false,
+      plan TEXT NOT NULL DEFAULT 'starter',
+      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS tenants_slug_idx ON tenants(slug)`;
+  await sql`CREATE INDEX IF NOT EXISTS tenants_domain_idx ON tenants(domain)`;
+
   // Users
   await sql`
     CREATE TABLE IF NOT EXISTS users (
@@ -54,12 +75,34 @@ export async function initDb() {
   await sql`
     CREATE INDEX IF NOT EXISTS bookings_host_idx ON bookings("hostId")
   `;
+  // Multi-tenancy
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS tenant_id TEXT REFERENCES tenants(id) ON DELETE SET NULL`;
+  await sql`CREATE INDEX IF NOT EXISTS bookings_tenant_idx ON bookings(tenant_id)`;
+  // Payment tracking (Stripe)
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'not_required'`;
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stripe_payment_intent_id TEXT`;
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS amount_paid INTEGER`; -- cents
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS platform_fee INTEGER`; -- cents
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS bookings_stripe_pi_idx ON bookings(stripe_payment_intent_id) WHERE stripe_payment_intent_id IS NOT NULL`;
+  // Cal.com reservation
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cal_booking_uid TEXT`;
+  // SMS tracking flags (atomic — set true once sent, never reset)
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS sms_confirmation_sent BOOLEAN DEFAULT false`;
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS sms_reminder_24h_sent BOOLEAN DEFAULT false`;
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS sms_reminder_1h_sent BOOLEAN DEFAULT false`;
+  // Attendance
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS attended BOOLEAN`;
 
   // trust_tier: unverified | verified (additive, lives only in Profile)
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS trust_tier TEXT DEFAULT 'unverified'`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS "avatarUrl" TEXT`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT`;
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS "locationArea" TEXT`;
+  // Multi-tenancy: participant/host scoped to a tenant
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id TEXT REFERENCES tenants(id) ON DELETE SET NULL`;
+  // SMS delivery: phone number in E.164 format e.g. +61412345678
+  await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT`;
+  await sql`CREATE INDEX IF NOT EXISTS users_tenant_idx ON users(tenant_id)`;
 
   // Communities (object-based management)
   await sql`
@@ -165,6 +208,38 @@ export async function initDb() {
   await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS "imageUrl" TEXT`;
   await sql`CREATE INDEX IF NOT EXISTS events_community_idx ON events("communityId")`;
   await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS audience TEXT DEFAULT 'public'`;
+  // Multi-tenancy
+  await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS tenant_id TEXT REFERENCES tenants(id) ON DELETE SET NULL`;
+  await sql`CREATE INDEX IF NOT EXISTS events_tenant_idx ON events(tenant_id)`;
+  // OhPlaces booking flow fields
+  await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS host_id TEXT REFERENCES users(id)`;
+  await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS venue_id TEXT`; -- FK to venues added after venues table
+  await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS cal_event_type_id TEXT`;
+  await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS modality TEXT DEFAULT 'in_person'`; -- in_person | online | hybrid
+  await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS price INTEGER DEFAULT 0`; -- cents; 0 = free
+  await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS pricing_type TEXT DEFAULT 'free'`; -- free | fixed | sliding_scale
+  await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS discoverable BOOLEAN DEFAULT false`;
+  await sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS recurrence_rule TEXT`;
+  await sql`CREATE INDEX IF NOT EXISTS events_discoverable_idx ON events(discoverable, tenant_id) WHERE discoverable = true`;
+
+  // ─── Venues (tenant-scoped physical spaces) ──────────────────────────────────
+  // Separate from "places" (community feature) — these are bookable venue records
+  await sql`
+    CREATE TABLE IF NOT EXISTS venues (
+      id TEXT PRIMARY KEY,
+      tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      address TEXT,
+      suburb TEXT,
+      city TEXT,
+      lat DOUBLE PRECISION,
+      lng DOUBLE PRECISION,
+      capacity INTEGER,
+      purposefields_visible BOOLEAN DEFAULT false,
+      "createdAt" TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  await sql`CREATE INDEX IF NOT EXISTS venues_tenant_idx ON venues(tenant_id)`;
 
   // Object memberships: ownership/collaboration (owner | collaborator | viewer)
   await sql`

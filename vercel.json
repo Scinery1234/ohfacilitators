@@ -1,3 +1,15 @@
 {
-  "framework": "vite"
+  "framework": "vite",
+  "crons": [
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "*/30 * * * *"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/hosts/:slug",
+      "destination": "/api/hosts/[slug]"
+    }
+  ]
 }
