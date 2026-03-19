@@ -92,6 +92,10 @@ export async function initDb() {
   await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS sms_reminder_1h_sent BOOLEAN DEFAULT false`;
   // Attendance
   await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS attended BOOLEAN`;
+  // Cancellation token: randomly generated hex sent to participant's email
+  // Allows unauthenticated cancellation via POST /api/bookings/:id/cancel
+  await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancellation_token TEXT`;
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS bookings_cancellation_token_idx ON bookings(cancellation_token) WHERE cancellation_token IS NOT NULL`;
 
   // trust_tier: unverified | verified (additive, lives only in Profile)
   await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS trust_tier TEXT DEFAULT 'unverified'`;

@@ -7,9 +7,10 @@
     }
   ],
   "rewrites": [
-    {
-      "source": "/api/hosts/:slug",
-      "destination": "/api/hosts/[slug]"
-    }
+    { "source": "/api/hosts/:slug", "destination": "/api/hosts/[slug]" },
+    { "source": "/api/events/:id/slots", "destination": "/api/events/[id]/slots" },
+    { "source": "/api/bookings/:id/cancel", "destination": "/api/bookings/[id]/cancel" },
+    { "source": "/api/dashboard/sessions/:id/participants", "destination": "/api/dashboard/sessions/[id]/participants" },
+    { "source": "/api/dashboard/bookings/:id/attended", "destination": "/api/dashboard/bookings/[id]/attended" }
   ]
 }

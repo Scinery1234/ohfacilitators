@@ -280,6 +280,67 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
+  // Handle GET /api/events?tenant=:slug (tenant-scoped public event list — booking page)
+  const tenantSlug = typeof req.query.tenant === 'string' ? req.query.tenant : null;
+  if (req.method === 'GET' && tenantSlug) {
+    try {
+      res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=180');
+
+      // Resolve tenant — fail loudly if not found (don't leak other tenants' data)
+      const tenantRows = await sql`SELECT id FROM tenants WHERE slug = ${tenantSlug} LIMIT 1`;
+      if (tenantRows.length === 0) {
+        return res.status(404).json({ message: 'Tenant not found' });
+      }
+      const tenantId = (tenantRows[0] as { id: string }).id;
+
+      const rows = await sql`
+        SELECT
+          e.id, e.title, e.description, e."imageUrl",
+          e."startAt", e."endAt", e.capacity,
+          e.price, e.pricing_type, e.modality,
+          e.discoverable, e.visibility, e."createdAt",
+          v.name AS venue_name, v.suburb, v.city,
+          COALESCE(cnt.c, 0)::int AS booked_count
+        FROM events e
+        LEFT JOIN venues v ON v.id = e.venue_id
+        LEFT JOIN (
+          SELECT "listingId", COUNT(*)::int AS c
+          FROM bookings
+          WHERE "listingType" = 'event' AND status IN ('pending', 'confirmed')
+          GROUP BY "listingId"
+        ) cnt ON cnt."listingId" = e.id
+        WHERE e.tenant_id = ${tenantId}
+          AND e.visibility = 'public'
+          AND e."startAt" > NOW()
+        ORDER BY e."startAt" ASC
+        LIMIT 50
+      `;
+
+      const events = rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        description: r.description ?? null,
+        imageUrl: r.imageUrl ?? null,
+        startAt: r.startAt,
+        endAt: r.endAt ?? null,
+        capacity: r.capacity ?? null,
+        bookedCount: r.booked_count,
+        price: r.price ?? 0,
+        pricingType: r.pricing_type ?? 'free',
+        modality: r.modality ?? 'in_person',
+        discoverable: r.discoverable ?? false,
+        venue: r.venue_name
+          ? { name: r.venue_name, suburb: r.suburb ?? null, city: r.city ?? null }
+          : null,
+      }));
+
+      return res.json({ events });
+    } catch (err) {
+      console.error('Get tenant events error:', err);
+      return res.status(500).json({ message: 'Failed to fetch events' });
+    }
+  }
+
   // Handle GET /api/events (public list - for Explore / Communities)
   if (req.method === 'GET') {
     try {
